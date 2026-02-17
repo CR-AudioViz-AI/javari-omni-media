@@ -36,6 +36,7 @@ export default function LibraryPage() {
     if (user) {
       loadMediaItems()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, filterType, sortBy, sortOrder])
 
   const loadMediaItems = async () => {

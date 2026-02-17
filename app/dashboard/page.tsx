@@ -21,6 +21,7 @@ export default function DashboardPage() {
     if (user) {
       loadUserStats()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   const loadUserStats = async () => {
