@@ -50,7 +50,7 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              <Link href="/dashboard">
+              <Link href="/auth/signup">
                 <button className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-lg transition-all hover:scale-105 animate-glow">
                   Start Free Trial
                 </button>
@@ -186,7 +186,7 @@ export default function HomePage() {
             <p className="text-xl text-gray-300 mb-8">
               Join thousands saving $200-400/year while simplifying their digital life
             </p>
-            <Link href="/dashboard">
+            <Link href="/auth/signup">
               <button className="px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-xl transition-all hover:scale-105 animate-glow">
                 Start Your Free Trial
               </button>
