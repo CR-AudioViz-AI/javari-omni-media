@@ -60,7 +60,7 @@ export default function FileUploadZone() {
 
   const processFile = async (uploadedFile: UploadedFile) => {
     try {
-      // Step 1: Analyze file type
+      // Step 1: Analyze file type (local)
       setFiles(prev => prev.map(f => 
         f.id === uploadedFile.id 
           ? { ...f, status: 'analyzing', progress: 20 }
@@ -69,24 +69,34 @@ export default function FileUploadZone() {
 
       const fileType = detectFileType(uploadedFile.file)
       
-      // Step 2: Extract metadata
+      // Step 2: Upload to server (real API call)
       setFiles(prev => prev.map(f => 
         f.id === uploadedFile.id 
-          ? { ...f, progress: 40 }
+          ? { ...f, progress: 40, status: 'organizing' }
           : f
       ))
 
-      const metadata = await extractMetadata(uploadedFile.file, fileType)
+      const formData = new FormData()
+      formData.append('file', uploadedFile.file)
       
-      // Step 3: Generate proper name
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Upload failed')
+      }
+      
+      const result = await response.json()
+      
+      // Step 3: Processing metadata on server
       setFiles(prev => prev.map(f => 
         f.id === uploadedFile.id 
-          ? { ...f, status: 'organizing', progress: 60 }
+          ? { ...f, progress: 80 }
           : f
       ))
-
-      const newName = generateProperName(uploadedFile.file.name, fileType, metadata)
-      const targetLibrary = getTargetLibrary(fileType)
 
       // Step 4: Complete
       setFiles(prev => prev.map(f => 
@@ -95,15 +105,16 @@ export default function FileUploadZone() {
               ...f, 
               status: 'complete', 
               progress: 100,
-              detectedType: fileType,
-              metadata,
-              newName,
-              targetLibrary
+              detectedType: result.mediaItem.type,
+              metadata: result.mediaItem.metadata,
+              newName: result.mediaItem.properFilename,
+              targetLibrary: getTargetLibrary(result.mediaItem.type)
             }
           : f
       ))
 
     } catch (error) {
+      console.error('Error processing file:', error)
       setFiles(prev => prev.map(f => 
         f.id === uploadedFile.id 
           ? { ...f, status: 'error', progress: 0 }
@@ -154,94 +165,6 @@ export default function FileUploadZone() {
     }
 
     return 'document'
-  }
-
-  const extractMetadata = async (
-    file: File, 
-    type: UploadedFile['detectedType']
-  ): Promise<UploadedFile['metadata']> => {
-    const fileName = file.name
-
-    // Extract year
-    const yearMatch = fileName.match(/\b(19\d{2}|20\d{2})\b/)
-    const year = yearMatch ? parseInt(yearMatch[1]) : undefined
-
-    if (type === 'tv_episode') {
-      // Extract season and episode
-      const seMatch = fileName.match(/s(\d{1,2})e(\d{1,2})/i)
-      const xMatch = fileName.match(/(\d{1,2})x(\d{1,2})/i)
-      
-      if (seMatch) {
-        return {
-          title: fileName.split(/s\d{1,2}e\d{1,2}/i)[0].replace(/\./g, ' ').trim(),
-          season: parseInt(seMatch[1]),
-          episode: parseInt(seMatch[2]),
-          year
-        }
-      } else if (xMatch) {
-        return {
-          title: fileName.split(/\d{1,2}x\d{1,2}/i)[0].replace(/\./g, ' ').trim(),
-          season: parseInt(xMatch[1]),
-          episode: parseInt(xMatch[2]),
-          year
-        }
-      }
-    }
-
-    if (type === 'movie') {
-      // Clean up movie title
-      const title = fileName
-        .replace(/\.(mp4|mkv|avi|mov)$/i, '')
-        .replace(/\b(19\d{2}|20\d{2})\b.*$/, '')
-        .replace(/[._]/g, ' ')
-        .trim()
-      
-      return { title, year }
-    }
-
-    if (type === 'music') {
-      // Try to extract artist and album from path/name
-      const parts = fileName.split(/[-–—]/)
-      if (parts.length >= 2) {
-        return {
-          artist: parts[0].trim(),
-          title: parts[1].replace(/\.\w+$/, '').trim()
-        }
-      }
-    }
-
-    return { title: fileName }
-  }
-
-  const generateProperName = (
-    originalName: string,
-    type: UploadedFile['detectedType'],
-    metadata: UploadedFile['metadata']
-  ): string => {
-    const ext = originalName.split('.').pop()
-
-    switch (type) {
-      case 'movie':
-        // Format: "Movie Title (Year).ext"
-        return `${metadata?.title || 'Unknown'} (${metadata?.year || 'Unknown'}).${ext}`
-
-      case 'tv_episode':
-        // Format: "Show Title - S01E05 - Episode Title.ext"
-        const s = String(metadata?.season || 1).padStart(2, '0')
-        const e = String(metadata?.episode || 1).padStart(2, '0')
-        return `${metadata?.title || 'Unknown'} - S${s}E${e}.${ext}`
-
-      case 'music':
-        // Format: "Artist - Track Title.ext"
-        return `${metadata?.artist || 'Unknown Artist'} - ${metadata?.title || originalName}.${ext}`
-
-      case 'photo':
-        // Keep original or use date-based naming
-        return originalName
-
-      default:
-        return originalName
-    }
   }
 
   const getTargetLibrary = (type: UploadedFile['detectedType']): string => {
