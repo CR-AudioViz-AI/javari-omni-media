@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 import { supabase, STORAGE_BUCKETS } from '@/lib/supabase'
 import { 
   extractBasicFileInfo, 
@@ -13,6 +15,19 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const supabaseAuth = createRouteHandlerClient({ cookies })
+    const { data: { session } } = await supabaseAuth.auth.getSession()
+    
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please sign in' },
+        { status: 401 }
+      )
+    }
+
+    const userId = session.user.id
+
     const formData = await request.formData()
     const file = formData.get('file') as File
     
@@ -22,10 +37,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
-    // For now, we'll use a hardcoded user ID
-    // In production, this would come from authentication
-    const userId = 'test-user-id'
 
     // Step 1: Extract basic file information
     const basicInfo = extractBasicFileInfo(file.name, file.size)

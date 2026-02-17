@@ -3,6 +3,9 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, File, FileVideo, FileAudio, FileImage, FileText, Sparkles, Check, X } from 'lucide-react'
+import { AppNavigation } from '@/components/AppNavigation'
+import { useAuth } from '@/lib/hooks/useAuth'
+import Link from 'next/link'
 
 interface UploadedFile {
   id: string
@@ -23,8 +26,43 @@ interface UploadedFile {
 }
 
 export default function FileUploadZone() {
+  const { user, loading } = useAuth()
   const [isDragging, setIsDragging] = useState(false)
   const [files, setFiles] = useState<UploadedFile[]>([])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
+        <div className="text-2xl text-gray-400">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
+        <div className="glass rounded-3xl p-12 text-center max-w-md">
+          <Upload className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-4">Sign in to Upload Files</h2>
+          <p className="text-gray-400 mb-6">
+            Create a free account to start organizing your media library
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Link href="/auth/login">
+              <button className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-semibold transition-colors">
+                Sign In
+              </button>
+            </Link>
+            <Link href="/auth/signup">
+              <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
+                Sign Up
+              </button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -196,8 +234,10 @@ export default function FileUploadZone() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950">
+      <AppNavigation />
+      
+      <div className="container mx-auto px-6 py-8">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-display font-bold mb-4">
