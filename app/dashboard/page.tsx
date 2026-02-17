@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react'
 import { AppNavigation } from '@/components/AppNavigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { 
-  Upload, Zap, HardDrive, TrendingUp, Save
-} from 'lucide-react'
+import { Upload, Zap, HardDrive, TrendingUp, Save } from 'lucide-react'
 import Link from 'next/link'
 
 export default function DashboardPage() {
