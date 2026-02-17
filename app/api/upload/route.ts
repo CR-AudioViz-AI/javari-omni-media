@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { supabase, STORAGE_BUCKETS } from '@/lib/supabase'
 import { 
   extractBasicFileInfo, 
   extractMetadataFromFilename, 
@@ -13,11 +12,24 @@ import { searchMovie, searchTVShow } from '@/lib/tmdb-api'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+// Inline storage buckets to avoid build-time supabase client creation
+const STORAGE_BUCKETS = {
+  MOVIES: 'movies',
+  TV_SHOWS: 'tv-shows',
+  MUSIC: 'music',
+  PHOTOS: 'photos',
+  COMICS: 'comics',
+  MAGAZINES: 'magazines',
+  EBOOKS: 'ebooks',
+  DOCUMENTS: 'documents',
+  TEMP: 'temp-uploads'
+} as const
+
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
-    const supabaseAuth = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabaseAuth.auth.getSession()
+    const supabase = createRouteHandlerClient({ cookies })
+    const { data: { session } } = await supabase.auth.getSession()
     
     if (!session) {
       return NextResponse.json(

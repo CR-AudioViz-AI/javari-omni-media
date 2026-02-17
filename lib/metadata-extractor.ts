@@ -1,4 +1,4 @@
-import { parseFile } from 'music-metadata'
+import * as mm from 'music-metadata'
 import { fileTypeFromBuffer } from 'file-type'
 
 export interface VideoMetadata {
@@ -33,7 +33,7 @@ export interface ImageMetadata {
  */
 export async function extractAudioMetadata(buffer: Buffer): Promise<AudioMetadata> {
   try {
-    const metadata = await parseFile(buffer as any)
+    const metadata = await mm.parseBuffer(buffer)
     
     return {
       duration: metadata.format.duration,
