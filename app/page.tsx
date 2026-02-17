@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import Link from 'next/link'
 import { 
   Smartphone, Tablet, Tv, Laptop, Cloud, Zap, Shield, 
   Sparkles, PlayCircle, Download, Settings, Check 
@@ -49,12 +50,16 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              <button className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-lg transition-all hover:scale-105 animate-glow">
-                Start Free Trial
-              </button>
-              <button className="px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-xl text-white rounded-full font-semibold text-lg transition-all hover:scale-105 border border-white/20">
-                Watch Demo
-              </button>
+              <Link href="/dashboard">
+                <button className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-lg transition-all hover:scale-105 animate-glow">
+                  Start Free Trial
+                </button>
+              </Link>
+              <Link href="/upload">
+                <button className="px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-xl text-white rounded-full font-semibold text-lg transition-all hover:scale-105 border border-white/20">
+                  Try File Upload
+                </button>
+              </Link>
             </div>
           </motion.div>
 
@@ -165,99 +170,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section className="py-24 relative">
-        <div className="container mx-auto px-6">
-          <h2 className="text-4xl md:text-5xl font-display font-bold text-center mb-4">
-            One-Time Payment. <span className="text-blue-400">Lifetime Access.</span>
-          </h2>
-          <p className="text-center text-gray-400 mb-16 text-lg">
-            No subscriptions. No monthly fees. Pay once, own forever.
-          </p>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {[
-              {
-                name: 'Starter',
-                price: '$49',
-                features: [
-                  'Unlimited compression',
-                  '200,000+ free content',
-                  'Full organization',
-                  'Desktop app',
-                  'Cloud optimization',
-                  '5 devices'
-                ]
-              },
-              {
-                name: 'Pro',
-                price: '$99',
-                features: [
-                  'Everything in Starter',
-                  'Mobile apps (iOS/Android)',
-                  'DVR functionality',
-                  'Javari AI autonomous mode',
-                  'API access',
-                  '10 devices',
-                  'Family sharing'
-                ],
-                popular: true
-              },
-              {
-                name: 'Ultimate',
-                price: '$199',
-                features: [
-                  'Everything in Pro',
-                  'Plex replacement mode',
-                  'Universal streaming guide',
-                  'Priority optimization',
-                  'Unlimited devices',
-                  'White-glove onboarding',
-                  'Lifetime updates'
-                ]
-              }
-            ].map((plan) => (
-              <div
-                key={plan.name}
-                className={`glass rounded-2xl p-8 ${
-                  plan.popular ? 'ring-2 ring-blue-500 scale-105' : ''
-                } relative`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold">
-                    Most Popular
-                  </div>
-                )}
-                <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                <div className="mb-6">
-                  <span className="text-5xl font-bold">{plan.price}</span>
-                  <span className="text-gray-400"> one-time</span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-300">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button className={`w-full py-3 rounded-full font-semibold transition-all ${
-                  plan.popular
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}>
-                  Get Started
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-center text-gray-400 mt-12">
-            All plans include <span className="text-green-400 font-semibold">30-day money-back guarantee</span>
-          </p>
-        </div>
-      </section>
-
       {/* CTA */}
       <section className="py-24 relative">
         <div className="container mx-auto px-6 text-center">
@@ -274,9 +186,11 @@ export default function HomePage() {
             <p className="text-xl text-gray-300 mb-8">
               Join thousands saving $200-400/year while simplifying their digital life
             </p>
-            <button className="px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-xl transition-all hover:scale-105 animate-glow">
-              Start Your Free Trial
-            </button>
+            <Link href="/dashboard">
+              <button className="px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-xl transition-all hover:scale-105 animate-glow">
+                Start Your Free Trial
+              </button>
+            </Link>
             <p className="text-sm text-gray-400 mt-4">No credit card required</p>
           </motion.div>
         </div>
