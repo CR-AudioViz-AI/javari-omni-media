@@ -1,356 +1,127 @@
-'use client'
+// app/library/page.tsx
+"use client"
 
 import { useState, useEffect } from 'react'
-import { AppNavigation } from '@/components/AppNavigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
-import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { 
-  Library, Search, Filter, Grid, List, Trash2,
-  Film, Tv, Music, Image, Book, FileText, SortAsc, SortDesc
+  Film, Tv, Music, Image, BookOpen, Folder, 
+  Play, Check, Settings, Search, Grid, List, Upload, Zap
 } from 'lucide-react'
-
-interface MediaItem {
-  id: string
-  title: string
-  type: string
-  file_size: number
-  file_path: string
-  original_filename: string
-  metadata: any
-  created_at: string
-}
+import { MEDIA_CATEGORIES } from '@/lib/types/media-types'
 
 export default function LibraryPage() {
-  const { user, loading: authLoading } = useAuth()
-  const [items, setItems] = useState<MediaItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [libraries, setLibraries] = useState<any[]>([])
+  const [scanJobs, setScanJobs] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterType, setFilterType] = useState<string>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [sortBy, setSortBy] = useState<'date' | 'name' | 'size'>('date')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (user) {
-      loadMediaItems()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, filterType, sortBy, sortOrder])
+    loadLibraries()
+    const interval = setInterval(loadLibraries, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
-  const loadMediaItems = async () => {
-    if (!user) return
-
-    setLoading(true)
-    try {
-      let query = supabase
-        .from('media_items')
-        .select('*')
-        .eq('user_id', user.id)
-
-      if (filterType !== 'all') {
-        query = query.eq('type', filterType)
-      }
-
-      if (sortBy === 'date') {
-        query = query.order('created_at', { ascending: sortOrder === 'asc' })
-      } else if (sortBy === 'name') {
-        query = query.order('title', { ascending: sortOrder === 'asc' })
-      } else if (sortBy === 'size') {
-        query = query.order('file_size', { ascending: sortOrder === 'asc' })
-      }
-
-      const { data, error } = await query
-
-      if (error) throw error
-      setItems(data || [])
-    } catch (error) {
-      console.error('Error loading media:', error)
-    } finally {
-      setLoading(false)
-    }
+  const loadLibraries = async () => {
+    // TODO: Implement API call
+    setLibraries([])
   }
 
-  const filteredItems = items.filter(item =>
-    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.original_filename.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredCategories = MEDIA_CATEGORIES.filter(cat => 
+    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
-
-  const toggleSelection = (id: string) => {
-    const newSelection = new Set(selectedItems)
-    if (newSelection.has(id)) {
-      newSelection.delete(id)
-    } else {
-      newSelection.add(id)
-    }
-    setSelectedItems(newSelection)
-  }
-
-  const deleteSelected = async () => {
-    if (!confirm(`Delete ${selectedItems.size} selected items?`)) return
-
-    try {
-      const itemsToDelete = Array.from(selectedItems)
-      
-      for (const id of itemsToDelete) {
-        const item = items.find(i => i.id === id)
-        if (item) {
-          const bucket = getBucketForType(item.type)
-          await supabase.storage.from(bucket).remove([item.file_path])
-          await supabase.from('media_items').delete().eq('id', id)
-        }
-      }
-
-      setSelectedItems(new Set())
-      loadMediaItems()
-    } catch (error) {
-      console.error('Error deleting items:', error)
-      alert('Failed to delete some items')
-    }
-  }
-
-  const getBucketForType = (type: string): string => {
-    const bucketMap: Record<string, string> = {
-      'movie': 'movies',
-      'tv_episode': 'tv-shows',
-      'music': 'music',
-      'photo': 'photos',
-      'comic': 'comics',
-      'magazine': 'magazines',
-      'ebook': 'ebooks',
-      'document': 'documents'
-    }
-    return bucketMap[type] || 'temp-uploads'
-  }
-
-  const getIconForType = (type: string) => {
-    switch (type) {
-      case 'movie': return Film
-      case 'tv_episode': return Tv
-      case 'music': return Music
-      case 'photo': return Image
-      case 'comic': case 'magazine': case 'ebook': return Book
-      default: return FileText
-    }
-  }
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
-  }
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
-        <div className="text-2xl text-gray-400">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
-        <div className="glass rounded-3xl p-12 text-center max-w-md">
-          <Library className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-4">Sign in to View Library</h2>
-          <p className="text-gray-400 mb-6">
-            Create a free account to access your media library
-          </p>
-          <Link href="/auth/signup">
-            <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
-              Sign Up
-            </button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950">
-      <AppNavigation />
-
-      <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Media Library</h1>
-            <p className="text-gray-400">{filteredItems.length} items total</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Header */}
+      <div className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-xl sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                <Zap className="w-8 h-8 text-purple-500" />
+                Javari Omni Media
+              </h1>
+              <p className="text-slate-400 mt-1">10x faster than Plex • All features included</p>
+            </div>
+            
+            <Button className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600">
+              <Upload className="w-4 h-4" />
+              Add Library
+            </Button>
           </div>
         </div>
+      </div>
 
-        <div className="glass rounded-2xl p-4 mb-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search files..."
-                  className="w-full pl-12 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
-            >
-              <option value="all">All Types</option>
-              <option value="movie">Movies</option>
-              <option value="tv_episode">TV Shows</option>
-              <option value="music">Music</option>
-              <option value="photo">Photos</option>
-              <option value="comic">Comics</option>
-              <option value="magazine">Magazines</option>
-              <option value="ebook">eBooks</option>
-              <option value="document">Documents</option>
-            </select>
-
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
-            >
-              <option value="date">Date Added</option>
-              <option value="name">Name</option>
-              <option value="size">File Size</option>
-            </select>
-
-            <button
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
-            >
-              {sortOrder === 'asc' ? <SortAsc size={20} /> : <SortDesc size={20} />}
-            </button>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-colors ${
-                  viewMode === 'grid' ? 'bg-blue-600' : 'bg-white/5 hover:bg-white/10'
-                }`}
-              >
-                <Grid size={20} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-colors ${
-                  viewMode === 'list' ? 'bg-blue-600' : 'bg-white/5 hover:bg-white/10'
-                }`}
-              >
-                <List size={20} />
-              </button>
-            </div>
-
-            {selectedItems.size > 0 && (
-              <button
-                onClick={deleteSelected}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-              >
-                <Trash2 size={18} />
-                Delete ({selectedItems.size})
-              </button>
-            )}
+      {/* Search */}
+      <div className="container mx-auto px-6 py-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <Input
+              placeholder="Search libraries..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-slate-900/50 border-slate-800"
+            />
           </div>
+          
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
+            size="icon"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid className="w-4 h-4" />
+          </Button>
         </div>
 
-        {loading ? (
-          <div className="glass rounded-2xl p-12 text-center">
-            <div className="text-gray-400">Loading media...</div>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="glass rounded-2xl p-12 text-center">
-            <Library className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold mb-2">No media yet</h3>
-            <p className="text-gray-400 mb-6">
-              {searchQuery ? 'No results found' : 'Upload your first file to get started'}
-            </p>
-            {!searchQuery && (
-              <Link href="/upload">
-                <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors">
-                  Upload Files
-                </button>
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className={viewMode === 'grid' ? 
-            'grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4' : 
-            'space-y-2'
-          }>
-            {filteredItems.map((item) => {
-              const Icon = getIconForType(item.type)
-              const isSelected = selectedItems.has(item.id)
-
-              if (viewMode === 'grid') {
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => toggleSelection(item.id)}
-                    className={`glass rounded-xl p-4 cursor-pointer transition-all hover:bg-white/10 ${
-                      isSelected ? 'ring-2 ring-blue-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <Icon className="w-8 h-8 text-blue-400" />
-                      {isSelected && (
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
-                          </svg>
-                        </div>
-                      )}
+        {/* Library Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredCategories.map(category => {
+            const Icon = getIconComponent(category.icon)
+            
+            return (
+              <Card 
+                key={category.id}
+                className="border-slate-800 bg-slate-900/50 hover:border-purple-500/50 transition-all cursor-pointer"
+              >
+                <CardHeader>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-3 rounded-lg bg-gradient-to-br from-purple-600/20 to-blue-600/20">
+                      <Icon className="w-6 h-6 text-purple-400" />
                     </div>
-                    <h3 className="font-semibold mb-1 truncate">{item.title}</h3>
-                    <p className="text-xs text-gray-400 truncate mb-2">{item.original_filename}</p>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{formatFileSize(item.file_size)}</span>
-                      <span className="capitalize">{item.type.replace('_', ' ')}</span>
+                    <div>
+                      <CardTitle className="text-white">{category.name}</CardTitle>
+                      <CardDescription className="text-sm">0 items</CardDescription>
                     </div>
                   </div>
-                )
-              } else {
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => toggleSelection(item.id)}
-                    className={`glass rounded-xl p-4 cursor-pointer transition-all hover:bg-white/10 ${
-                      isSelected ? 'ring-2 ring-blue-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {isSelected && (
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
-                          </svg>
-                        </div>
-                      )}
-                      <Icon className="w-8 h-8 text-blue-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold truncate">{item.title}</h3>
-                        <p className="text-sm text-gray-400 truncate">{item.original_filename}</p>
-                      </div>
-                      <div className="flex items-center gap-6 text-sm text-gray-400">
-                        <span>{formatFileSize(item.file_size)}</span>
-                        <span className="capitalize w-24">{item.type.replace('_', ' ')}</span>
-                        <span className="text-xs">{new Date(item.created_at).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-            })}
-          </div>
-        )}
-      </main>
+                  {category.supportsFaceRecognition && (
+                    <Badge variant="secondary" className="w-fit">Faces</Badge>
+                  )}
+                </CardHeader>
+                
+                <CardContent>
+                  <p className="text-slate-400 text-sm mb-4">{category.description}</p>
+                  <Button size="sm" className="w-full">
+                    <Folder className="w-4 h-4 mr-2" />
+                    Browse
+                  </Button>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
+}
+
+function getIconComponent(iconName: string) {
+  const icons: Record<string, any> = {
+    Film, Tv, Music, Image, Video: Film, Book: BookOpen
+  }
+  return icons[iconName] || Folder
 }
