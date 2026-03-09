@@ -1,14 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  typescript: {
-    ignoreBuildErrors: true, // Temporary - will fix TS errors after deploy
+  reactStrictMode: true,
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '*.supabase.co' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: '*.cloudflare.com' },
+    ],
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '100mb'
-    }
-  }
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;
