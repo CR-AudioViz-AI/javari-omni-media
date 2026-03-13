@@ -70,8 +70,6 @@ export default function JavariOmniMedia() {
   const [toast, setToast] = useState<ToastState>({visible:false, message:''})
   const [genreFilter, setGenreFilter] = useState('All')
   const [iptvUrl, setIptvUrl] = useState('')
-  const [jellyfinUrl, setJellyfinUrl] = useState('')
-  const [jellyfinKey, setJellyfinKey] = useState('')
   const [plexUrl, setPlexUrl] = useState('')
   const [plexToken, setPlexToken] = useState('')
   const [showBanner, setShowBanner] = useState(true)
@@ -544,44 +542,47 @@ export default function JavariOmniMedia() {
     nas: (
       <div>
         <div style={{display:'flex', alignItems:'center', marginBottom:6}}>
-          <span style={{fontFamily:'Georgia, serif', fontSize:20, color:'#F5F0FF'}}>💾 My NAS / Home Server</span>
-          {helpTip('Connect your Synology, QNAP, or any computer running Plex or Jellyfin. Javari imports your media library automatically.')}
+          <span style={{fontFamily:'Georgia, serif', fontSize:20, color:'#F5F0FF'}}>💾 Connect Plex</span>
+          {helpTip('Connect your Plex Media Server. Javari will import all your libraries — movies, TV, music, photos — and they appear right alongside your streaming services.')}
         </div>
-        <div style={{fontSize:13, color:'#9D8FBB', marginBottom:22, lineHeight:1.6}}>Connect your home server and your personal movies, music, and photos appear right alongside your streaming services.</div>
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+        <div style={{fontSize:13, color:'#9D8FBB', marginBottom:22, lineHeight:1.6}}>Enter your Plex server address and token below. Your files stay on your NAS — Javari only reads them, never modifies or deletes anything.</div>
+        <div style={{maxWidth:560}}>
           <div style={card}>
-            <div style={{display:'flex', alignItems:'center', marginBottom:14}}>
-              <span style={{fontSize:14, fontWeight:500, color:'#F5F0FF'}}>Jellyfin</span>
-              {helpTip('Jellyfin is free media server software. If it\'s running on your NAS, enter the address shown in your Jellyfin dashboard.')}
-            </div>
-            <div style={{display:'flex', flexDirection:'column', gap:10}}>
+            <div style={{display:'flex', alignItems:'center', gap:14, marginBottom:20}}>
+              <div style={{width:48, height:48, borderRadius:12, background:'linear-gradient(135deg,#E5A00D,#CC7A00)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, flexShrink:0}}>🎬</div>
               <div>
-                <div style={{display:'flex', alignItems:'center', fontSize:12, color:'#9D8FBB', marginBottom:6}}>Server Address {helpTip('Usually: http://192.168.1.100:8096 — check your Jellyfin dashboard.')}</div>
-                <input value={jellyfinUrl} onChange={e => setJellyfinUrl(e.target.value)} placeholder="http://192.168.1.x:8096" style={inputStyle}/>
+                <div style={{fontSize:16, fontWeight:500, color:'#F5F0FF'}}>Plex Media Server</div>
+                <div style={{fontSize:12, color:'#9D8FBB', marginTop:2}}>Synology NAS · Read-only connection</div>
               </div>
-              <div>
-                <div style={{display:'flex', alignItems:'center', fontSize:12, color:'#9D8FBB', marginBottom:6}}>API Key {helpTip('In Jellyfin: Dashboard → API Keys → + → Copy the key.')}</div>
-                <input value={jellyfinKey} onChange={e => setJellyfinKey(e.target.value)} type="password" placeholder="Your Jellyfin API key" style={inputStyle}/>
-              </div>
-              <button style={btnGrad} onClick={() => showToast('Connecting to Jellyfin...')}>Connect & Import Library</button>
             </div>
-          </div>
-          <div style={card}>
-            <div style={{display:'flex', alignItems:'center', marginBottom:14}}>
-              <span style={{fontSize:14, fontWeight:500, color:'#F5F0FF'}}>Plex</span>
-              {helpTip('If you use Plex, sign in here and Javari will import your Plex libraries automatically.')}
-            </div>
-            <div style={{display:'flex', flexDirection:'column', gap:10}}>
+            <div style={{display:'flex', flexDirection:'column', gap:14}}>
               <div>
-                <div style={{fontSize:12, color:'#9D8FBB', marginBottom:6}}>Plex Server URL</div>
+                <div style={{display:'flex', alignItems:'center', fontSize:12, color:'#9D8FBB', marginBottom:6}}>
+                  Plex Server URL
+                  {helpTip('Your Plex server address. From inside your home network this is usually http://[NAS-IP]:32400. You can find your NAS IP in your Synology DSM or router admin page.')}
+                </div>
                 <input value={plexUrl} onChange={e => setPlexUrl(e.target.value)} placeholder="http://192.168.1.x:32400" style={inputStyle}/>
               </div>
               <div>
-                <div style={{display:'flex', alignItems:'center', fontSize:12, color:'#9D8FBB', marginBottom:6}}>Plex Token {helpTip('In Plex: click any item → Get Info → View XML → find X-Plex-Token in the URL.')}</div>
-                <input value={plexToken} onChange={e => setPlexToken(e.target.value)} type="password" placeholder="Your Plex token" style={inputStyle}/>
+                <div style={{display:'flex', alignItems:'center', fontSize:12, color:'#9D8FBB', marginBottom:6}}>
+                  Plex Token
+                  {helpTip('How to find your token: Open Plex in your browser → click any movie or show → click ··· → Get Info → View XML → look for X-Plex-Token= in the URL that opens.')}
+                </div>
+                <input value={plexToken} onChange={e => setPlexToken(e.target.value)} type="password" placeholder="Your Plex token (from app.plex.tv)" style={inputStyle}/>
               </div>
-              <button style={btnGhost} onClick={() => showToast('Connecting to Plex...')}>Connect Plex</button>
+              <div style={{background:'rgba(229,160,13,.06)', border:'1px solid rgba(229,160,13,.2)', borderRadius:10, padding:'12px 14px', fontSize:12, color:'#E5A00D', lineHeight:1.6}}>
+                🔒 Read-only access only. Javari cannot modify, move, or delete any files on your Plex server.
+              </div>
+              <button style={btnGrad} onClick={() => showToast('Connecting to Plex... checking libraries ✓')}>Connect Plex & Import Libraries</button>
             </div>
+          </div>
+          <div style={{marginTop:16, padding:'14px 18px', background:'rgba(192,132,252,.06)', border:'1px solid rgba(192,132,252,.15)', borderRadius:12, fontSize:12, color:'#9D8FBB', lineHeight:1.8}}>
+            <div style={{fontWeight:500, color:'#F5F0FF', marginBottom:6}}>Need help finding your token?</div>
+            1. Open <span style={{color:'#C084FC'}}>app.plex.tv</span> in your browser<br/>
+            2. Click any movie → click <strong style={{color:'#F5F0FF'}}>···</strong> → <strong style={{color:'#F5F0FF'}}>Get Info</strong><br/>
+            3. Scroll to the bottom → click <strong style={{color:'#F5F0FF'}}>View XML</strong><br/>
+            4. In the URL that opens, find <strong style={{color:'#C084FC'}}>X-Plex-Token=</strong><br/>
+            5. Copy everything after the <strong style={{color:'#F5F0FF'}}>=</strong> sign — that&apos;s your token
           </div>
         </div>
       </div>
@@ -619,7 +620,7 @@ export default function JavariOmniMedia() {
           {[
             {i:'🔗', t:'How do I connect Netflix or Hulu?', s:'Step-by-step guide to connect your streaming services in under 2 minutes.', onClick: () => setNav('connect')},
             {i:'📋', t:'What is an IPTV / M3U playlist?', s:'IPTV explained in plain English — no tech knowledge required.', onClick: () => setNav('iptv')},
-            {i:'💾', t:'How do I add my home library?', s:'Connect your NAS or media server so your personal collection lives here too.', onClick: () => setNav('nas')},
+            {i:'💾', t:'How do I connect my Plex server?', s:'Connect your Plex Media Server and your entire library appears alongside your streaming services.', onClick: () => setNav('nas')},
             {i:'📺', t:"Why isn't a channel working?", s:'Troubleshoot live TV and IPTV playback issues in a few easy steps.'},
             {i:'⬇️', t:'How do I download for offline?', s:'Save content to watch without internet — on a plane or on the go.'},
             {i:'✨', t:'Ask Javari AI anything', s:"Can't find an answer? Javari AI will walk you through it in plain language.", onClick: () => setNav('javari')},
@@ -760,7 +761,7 @@ export default function JavariOmniMedia() {
           <div style={{fontSize:10, letterSpacing:1.5, color:'#5A4F72', padding:'12px 18px 5px', textTransform:'uppercase', fontWeight:500}}>Sources</div>
           {navItem('connect','🔗','Connect Apps')}
           {navItem('iptv','📋','IPTV / M3U')}
-          {navItem('nas','💾','My NAS / Server')}
+          {navItem('nas','💾','Connect Plex')}
           <div style={{fontSize:10, letterSpacing:1.5, color:'#5A4F72', padding:'12px 18px 5px', textTransform:'uppercase', fontWeight:500}}>More</div>
           {navItem('settings','⚙️','Settings')}
           {navItem('help','❓','Help Center')}
@@ -815,3 +816,4 @@ export default function JavariOmniMedia() {
     </div>
   )
 }
+
