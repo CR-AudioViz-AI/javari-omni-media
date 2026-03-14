@@ -1,7 +1,8 @@
 // app/api/javari/chat/route.ts
-// Javari AI Chat — OpenRouter only (300+ models including free Gemini Flash)
-// Gemini direct API never worked — OpenRouter handles Gemini + everything else
-// TODO: when core ecosystem live, route through craudiovizai.com multi-model router
+// Javari AI Chat — OpenRouter only (Gemini Flash + 300+ models)
+// Do NOT use Claude/Anthropic — too expensive, hallucinates for this use case
+// TODO: when core ecosystem live, remove OPENROUTER_API_KEY from Vercel env
+//       and route through craudiovizai.com multi-model router instead
 // Date: March 13, 2026 | Henderson Standard
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -9,123 +10,139 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// Model priority: free first, cheap fallbacks, static last
-// All via OpenRouter — one key, 300+ models
-const MODELS = [
-  'google/gemini-flash-1.5:free',        // Gemini Flash — free via OpenRouter
-  'meta-llama/llama-3.1-8b-instruct:free', // Llama 3.1 8B — free
-  'mistralai/mistral-7b-instruct:free',   // Mistral 7B — free
-  'deepseek/deepseek-chat:free',          // DeepSeek — free
+// Model preference order — all via OpenRouter, cheapest/fastest first
+const MODEL_CASCADE = [
+  'google/gemini-flash-1.5',           // Gemini Flash — fast, cheap, good
+  'google/gemini-flash-1.5-8b',        // Smaller Gemini — even cheaper
+  'meta-llama/llama-3.1-8b-instruct:free', // Llama free tier
+  'mistralai/mistral-7b-instruct:free',    // Mistral free tier
+  'google/gemma-2-9b-it:free',             // Gemma free tier
 ]
 
-const JAVARI_SYSTEM = `You are Javari, the AI assistant inside Javari Omni-Media.
+const SYSTEM_PROMPT = `You are Javari, the AI inside Javari Omni-Media — a unified entertainment platform.
 
-Your job: help users find content to watch, set up their library, and navigate the app.
+Your job:
+- Help users find what to watch or listen to
+- Guide users through connecting Plex, Jellyfin, IPTV playlists, and NAS folders  
+- Answer questions about their library
+- Give short, direct, accurate recommendations
 
 Rules:
-- Be warm, direct, and brief. Under 80 words unless asked for more.
-- Give specific, accurate answers. Never make things up.
-- If you don't know, say so clearly.
-- Never mention your model name, Claude, or any AI company.
-- You are Javari. Only Javari.
+- Be warm and direct. No filler phrases.
+- Keep responses under 120 words unless asked for more.
+- If you don't know, say so. Never make things up.
+- Never mention Claude, Anthropic, OpenRouter, or any AI model names.
+- You are Javari. That is your only identity.`
 
-When helping with setup: give exact steps, exact field names, exact paths.
-When recommending content: give specific titles with where to watch them.`
+// Smart static fallbacks — zero cost, zero hallucination
+const STATIC_RESPONSES: Array<{ match: (s: string) => boolean; response: string }> = [
+  {
+    match: s => /plex.*(connect|setup|token|url)/i.test(s) || /(connect|setup).*plex/i.test(s),
+    response: "To connect Plex: go to Sources → Connect Mode. Enter your server URL (usually http://192.168.1.x:32400) and your Plex token. To find your token: open any movie in Plex → ··· → Get Info → View XML → copy the value after X-Plex-Token= in the URL."
+  },
+  {
+    match: s => /jellyfin.*(connect|setup|key)/i.test(s) || /(connect|setup).*jellyfin/i.test(s),
+    response: "To connect Jellyfin: Sources → Connect Mode → enter your server address (usually http://192.168.1.x:8096) and API key. Find your API key in Jellyfin Dashboard → API Keys → +."
+  },
+  {
+    match: s => /folder|nas|scan|standalone|synology/i.test(s),
+    response: "To add your NAS library: Sources → Standalone Mode → paste your folder path (e.g. /volume1/media/Movies), pick the type, hit Add & Auto-Scan. Javari scans the files and fetches metadata automatically."
+  },
+  {
+    match: s => /iptv|m3u|channel|playlist/i.test(s),
+    response: "To add IPTV channels: Sources → IPTV / M3U → paste your M3U playlist URL from your provider. Channels appear in Live TV automatically. Javari doesn't provide channels — you need an active IPTV subscription."
+  },
+  {
+    match: s => /watch|tonight|recommend|suggest|good movie|good show/i.test(s),
+    response: "Connect your Plex server or add your NAS folders first, and I'll recommend from your actual library. Or check Live TV — there's likely something on right now."
+  },
+]
 
 export async function POST(req: NextRequest) {
   try {
     const { messages, context } = await req.json()
 
-    if (!messages || !Array.isArray(messages)) {
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Missing messages' }, { status: 400 })
     }
 
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
+    const lastUserMsg = messages[messages.length - 1]?.content || ''
 
-    // Build context injection for first message
-    const contextNote = context ? [
-      context.plexConnected ? `User has Plex connected.` : '',
-      context.plexLibraries?.length ? `Plex libraries: ${context.plexLibraries.join(', ')}.` : '',
-      context.standaloneFolders?.length ? `Standalone folders: ${context.standaloneFolders.map((f: { label: string; type: string; count: number }) => `${f.label} (${f.count} ${f.type})`).join(', ')}.` : '',
-      context.services?.length ? `Streaming services: ${context.services.join(', ')}.` : '',
-    ].filter(Boolean).join(' ') : ''
-
-    const orMessages = [
-      { role: 'system', content: JAVARI_SYSTEM + (contextNote ? `\n\n[Context: ${contextNote}]` : '') },
-      ...messages.map((m: { role: string; content: string }) => ({
-        role: m.role === 'ai' ? 'assistant' : m.role,
-        content: m.content,
-      }))
-    ]
-
-    // Try each free model in priority order
-    if (OPENROUTER_API_KEY) {
-      for (const model of MODELS) {
-        try {
-          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://javari-omni-media.vercel.app',
-              'X-Title': 'Javari Omni-Media',
-            },
-            body: JSON.stringify({
-              model,
-              messages: orMessages,
-              max_tokens: 250,
-              temperature: 0.65,
-            }),
-            signal: AbortSignal.timeout(12000),
-          })
-
-          if (res.ok) {
-            const data = await res.json()
-            const text = data.choices?.[0]?.message?.content
-            if (text && text.trim()) {
-              return NextResponse.json({
-                content: [{ type: 'text', text: text.trim() }],
-                model,
-              })
-            }
-          }
-        } catch {
-          // This model timed out or failed — try next
-          continue
-        }
-      }
-    }
-
-    // Static fallback — no API needed, accurate answers to common questions
-    const last = messages[messages.length - 1]?.content?.toLowerCase() || ''
-
-    const staticReplies: [RegExp, string][] = [
-      [/plex|connect.*server|server.*connect/, "To connect Plex: Sources → Connect Mode → enter your server URL (http://192.168.1.x:32400) and token. Find your token: open Plex → click any item → ··· → Get Info → View XML → copy the value after X-Plex-Token="],
-      [/folder|nas|scan|standalone|synology|qnap/, "To add your NAS: Sources → Standalone Mode → paste your folder path (e.g. /volume1/media/Movies) → pick the type → Add & Auto-Scan. Javari fetches all metadata automatically."],
-      [/iptv|m3u|channel|playlist/, "To add IPTV channels: Sources → IPTV / M3U → paste your M3U playlist URL → Load Channels. They appear in Live TV immediately."],
-      [/watch|tonight|recommend|suggest/, "Connect your Plex server or add a NAS folder first and I can recommend from your actual library. Or check Live TV for what's on right now."],
-      [/token|find.*token|where.*token/, "Your Plex token: open Plex in browser → click any movie → ··· → Get Info → View XML → look for X-Plex-Token= in the URL that opens. Copy everything after the = sign."],
-      [/jellyfin/, "To connect Jellyfin: Sources → Connect Mode → enter your server address (http://192.168.1.x:8096) and API key. Find your API key in Jellyfin Dashboard → API Keys → +."],
-    ]
-
-    for (const [pattern, reply] of staticReplies) {
-      if (pattern.test(last)) {
+    // Check static responses first — fastest, cheapest, most accurate for setup questions
+    for (const sr of STATIC_RESPONSES) {
+      if (sr.match(lastUserMsg)) {
         return NextResponse.json({
-          content: [{ type: 'text', text: reply }],
-          model: 'static',
+          content: [{ type: 'text', text: sr.response }],
+          model: 'javari-static',
         })
       }
     }
 
+    const orKey = process.env.OPENROUTER_API_KEY || ''
+    if (!orKey) {
+      return NextResponse.json({
+        content: [{ type: 'text', text: "I'm Javari — your entertainment guide. Ask me what to watch, how to connect Plex, or how to add your NAS folders." }],
+        model: 'javari-static',
+      })
+    }
+
+    // Build context string
+    const contextStr = context ? `[Your setup: Plex ${context.plexConnected ? 'connected' : 'not connected'}${context.plexLibraries?.length ? `, libraries: ${context.plexLibraries.join(', ')}` : ''}${context.standaloneFolders?.length ? `, folders: ${context.standaloneFolders.map((f: {label:string;type:string;count:number}) => `${f.label}(${f.count})`).join(', ')}` : ''}${context.services?.length ? `, services: ${context.services.join(', ')}` : ''}]` : ''
+
+    const orMessages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...messages.map((m: { role: string; content: string }, i: number) => ({
+        role: m.role,
+        content: i === 0 && contextStr ? `${contextStr} ${m.content}` : m.content,
+      }))
+    ]
+
+    // Try each model in cascade order
+    for (const model of MODEL_CASCADE) {
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${orKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://javari-omni-media.vercel.app',
+            'X-Title': 'Javari',
+          },
+          body: JSON.stringify({
+            model,
+            messages: orMessages,
+            max_tokens: 200,
+            temperature: 0.65,
+          }),
+          signal: AbortSignal.timeout(12000),
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const text = data.choices?.[0]?.message?.content
+          if (text?.trim()) {
+            return NextResponse.json({
+              content: [{ type: 'text', text: text.trim() }],
+              model,
+            })
+          }
+        }
+      } catch {
+        // Try next model in cascade
+        continue
+      }
+    }
+
+    // All models failed — final static fallback
     return NextResponse.json({
-      content: [{ type: 'text', text: "I'm Javari — your entertainment guide. Ask me what to watch, how to connect your Plex server, add NAS folders, or set up IPTV channels." }],
-      model: 'static',
+      content: [{ type: 'text', text: "Having a moment — try again in a few seconds. Or ask me something specific like 'how do I connect Plex?'" }],
+      model: 'javari-static',
     })
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Request failed'
     return NextResponse.json({
-      content: [{ type: 'text', text: "Having a moment — try again in a few seconds." }],
+      content: [{ type: 'text', text: "Something went wrong on my end — try again in a moment." }],
       error: message,
     }, { status: 200 })
   }
