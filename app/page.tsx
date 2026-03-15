@@ -16,7 +16,7 @@ import {
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
-type NavId = 'home'|'movies'|'shows'|'livetv'|'sports'|'music'|'kids'|'library'|'watchlist'|'downloads'|'history'|'sources'|'iptv'|'settings'|'help'|'javari'|'profile'|'notifications'
+type NavId = 'home'|'movies'|'shows'|'livetv'|'sports'|'music'|'kids'|'library'|'watchlist'|'downloads'|'history'|'sources'|'iptv'|'settings'|'help'|'javari'|'profile'|'notifications'|'discover'
 
 type LibraryType = 'movies'|'tv'|'music'|'photos'|'podcasts'
 
@@ -136,6 +136,16 @@ export default function JavariOmniMedia() {
   // UI state
   const [genreFilter, setGenreFilter] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
+  const [legalOnly, setLegalOnly] = useState(false)
+  const [showDisclaimer, setShowDisclaimer] = useState(false)
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
+  const [searchResults, setSearchResults] = useState<{
+    free_streaming: unknown[]
+    public_domain: { id:string; title:string; year?:number; watch_url:string; description?:string; source_name:string }[]
+    total: number
+    search_ms: number
+  } | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const [showBanner, setShowBanner] = useState(true)
   const [activeLibraryKey, setActiveLibraryKey] = useState<string|null>(null)
   const [chatInput, setChatInput] = useState('')
@@ -573,6 +583,42 @@ export default function JavariOmniMedia() {
               <div style={{height:100,background:`linear-gradient(135deg,${c.bg},${c.bg}aa)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:32}}>{c.i}</div>
               <div style={{background:'#1E1829',padding:'9px 12px'}}><div style={{fontSize:12,fontWeight:500,color:'#F5F0FF',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.t}</div><div style={{fontSize:11,color:'#9D8FBB',marginTop:1}}>{c.s}</div></div>
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Free & Legal Content Discovery Strip */}
+      <div style={{marginBottom:24}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+          <span style={{fontFamily:'Georgia,serif',fontSize:18,color:'#F5F0FF'}}>🌐 Free & Legal Streaming</span>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:11,color:'#9D8FBB'}}>Legal only</span>
+            <div onClick={() => setLegalOnly(v=>!v)} style={{width:36,height:20,borderRadius:10,background:legalOnly?'#4ADE80':'#5A4F72',cursor:'pointer',position:'relative',transition:'background .3s'}}>
+              <div style={{position:'absolute',top:2,left:legalOnly?18:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left .3s'}}/>
+            </div>
+            <span onClick={() => setNav('discover')} style={{fontSize:12,color:'#C084FC',cursor:'pointer'}}>Explore all →</span>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10}}>
+          {[
+            {name:'Pluto TV',icon:'📺',url:'https://pluto.tv',color:'#1A0A3C',tag:'250+ Channels'},
+            {name:'Tubi',icon:'🎬',url:'https://tubitv.com',color:'#1A1000',tag:'50K+ Titles'},
+            {name:'Plex Free',icon:'🟠',url:'https://www.plex.tv/watch-free',color:'#2A1000',tag:'300+ Live'},
+            {name:'Internet Archive',icon:'🏛️',url:'https://archive.org',color:'#001A1A',tag:'Public Domain'},
+            {name:'Freevee',icon:'🟡',url:'https://www.amazon.com/adlp/freevee',color:'#1A1A00',tag:'Free Movies'},
+            {name:'Kanopy',icon:'🎓',url:'https://www.kanopy.com',color:'#001A00',tag:'Library Card'},
+          ].map((s,i) => (
+            <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>
+              <div style={{borderRadius:12,overflow:'hidden',border:'1px solid rgba(192,132,252,.15)',transition:'transform .2s',cursor:'pointer'}}
+                onMouseEnter={e=>(e.currentTarget.style.transform='translateY(-2px)')}
+                onMouseLeave={e=>(e.currentTarget.style.transform='translateY(0)')}>
+                <div style={{height:60,background:`linear-gradient(135deg,${s.color},${s.color}cc)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>{s.icon}</div>
+                <div style={{background:'#1E1829',padding:'8px 10px'}}>
+                  <div style={{fontSize:12,fontWeight:500,color:'#F5F0FF'}}>{s.name}</div>
+                  <div style={{fontSize:10,color:'#4ADE80',marginTop:1}}>{s.tag}</div>
+                </div>
+              </div>
+            </a>
           ))}
         </div>
       </div>
@@ -1036,6 +1082,21 @@ export default function JavariOmniMedia() {
     </div>
   )
 
+  // Universal media search
+  const handleSearch = async (q: string) => {
+    if (!q.trim() || q.length < 2) return
+    setSearchLoading(true)
+    try {
+      const res = await fetch(`/api/media/search?q=${encodeURIComponent(q)}&legal_only=${legalOnly}&limit=20`)
+      if (res.ok) {
+        const data = await res.json()
+        setSearchResults(data)
+        setNav('discover')
+      }
+    } catch { /* search failed gracefully */ }
+    finally { setSearchLoading(false) }
+  }
+
   const renderPage = () => {
     switch(nav) {
       case 'home': return renderHome()
@@ -1135,6 +1196,153 @@ export default function JavariOmniMedia() {
           </div>
         </div>
       )
+      case 'discover': return (
+        <div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:10}}>
+            <span style={{fontFamily:'Georgia,serif',fontSize:20,color:'#F5F0FF'}}>
+              🌐 Free & Legal Content Discovery
+            </span>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:12,color:'#9D8FBB'}}>Legal only mode</span>
+              <div onClick={() => setLegalOnly(v=>!v)} style={{width:40,height:22,borderRadius:11,background:legalOnly?'#4ADE80':'#5A4F72',cursor:'pointer',position:'relative',transition:'background .3s'}}>
+                <div style={{position:'absolute',top:3,left:legalOnly?21:3,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left .3s'}}/>
+              </div>
+            </div>
+          </div>
+
+          {/* Search results */}
+          {searchResults && (
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:13,color:'#9D8FBB',marginBottom:14}}>
+                Found {searchResults.total} results · {searchResults.search_ms}ms · Legal sources shown first
+              </div>
+              {searchResults.public_domain.length > 0 && (
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:14,fontWeight:500,color:'#4ADE80',marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+                    <span>🏛️ Public Domain</span>
+                    <span style={{fontSize:11,color:'#9D8FBB',fontWeight:400}}>Free, legal, downloadable</span>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12}}>
+                    {searchResults.public_domain.slice(0,12).map((item: {id:string;title:string;year?:number;watch_url:string;description?:string;source_name:string},i:number) => (
+                      <a key={i} href={item.watch_url} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>
+                        <div style={{borderRadius:12,overflow:'hidden',border:'1px solid rgba(74,222,128,.2)',background:'#1E1829',transition:'transform .2s'}}
+                          onMouseEnter={e=>(e.currentTarget.style.transform='translateY(-2px)')}
+                          onMouseLeave={e=>(e.currentTarget.style.transform='translateY(0)')}>
+                          <div style={{height:100,background:'linear-gradient(135deg,#001A1A,#004040)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32}}>🏛️</div>
+                          <div style={{padding:'10px 12px'}}>
+                            <div style={{fontSize:12,fontWeight:500,color:'#F5F0FF',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.title}</div>
+                            <div style={{fontSize:10,color:'#9D8FBB',marginTop:2}}>{item.year || ''} · {item.source_name}</div>
+                            <div style={{fontSize:10,color:'#4ADE80',marginTop:3}}>✓ Free · Legal · Open</div>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {searchResults.free_streaming.length > 0 && !legalOnly && (
+                <div>
+                  <div style={{fontSize:14,fontWeight:500,color:'#C084FC',marginBottom:12}}>📺 Free Streaming Platforms</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:10}}>
+                    {[
+                      {name:'Search Tubi',icon:'🎬',url:`https://tubitv.com/search/${encodeURIComponent(searchQuery)}`,color:'#1A1000'},
+                      {name:'Search Pluto TV',icon:'📺',url:`https://pluto.tv/search#${encodeURIComponent(searchQuery)}`,color:'#1A0A3C'},
+                      {name:'Search Plex Free',icon:'🟠',url:`https://app.plex.tv/desktop#!/search?query=${encodeURIComponent(searchQuery)}`,color:'#2A1000'},
+                      {name:'Search Freevee',icon:'🟡',url:`https://www.amazon.com/s?k=${encodeURIComponent(searchQuery)}&i=instant-video`,color:'#1A1A00'},
+                    ].map((p,i) => (
+                      <a key={i} href={p.url} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>
+                        <div style={{padding:'12px',background:'#1E1829',border:'1px solid rgba(192,132,252,.15)',borderRadius:10,cursor:'pointer',transition:'border .2s'}}
+                          onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(192,132,252,.4)')}
+                          onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(192,132,252,.15)')}>
+                          <div style={{fontSize:20,marginBottom:4}}>{p.icon}</div>
+                          <div style={{fontSize:12,fontWeight:500,color:'#F5F0FF'}}>{p.name}</div>
+                          <div style={{fontSize:10,color:'#C084FC',marginTop:2}}>Opens free service →</div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FAST Platforms grid */}
+          {!searchResults && (
+            <div>
+              <div style={{fontSize:13,color:'#9D8FBB',marginBottom:16,lineHeight:1.6}}>
+                Javari indexes free, legal streaming platforms and public domain libraries. Use the search bar above to find content across all sources. Javari does not host any media.
+              </div>
+              <div style={{fontSize:14,fontWeight:500,color:'#4ADE80',marginBottom:10}}>🟢 Free Ad-Supported (FAST)</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10,marginBottom:20}}>
+                {[
+                  {n:'Pluto TV',i:'📺',u:'https://pluto.tv',t:'250+ channels'},
+                  {n:'Tubi',i:'🎬',u:'https://tubitv.com',t:'50K+ titles'},
+                  {n:'Plex Free',i:'🟠',u:'https://www.plex.tv/watch-free',t:'300+ live channels'},
+                  {n:'Freevee',i:'🟡',u:'https://www.amazon.com/adlp/freevee',t:'Amazon free tier'},
+                  {n:'Roku Channel',i:'📡',u:'https://therokuchannel.roku.com',t:'Roku originals'},
+                  {n:'Sling Free',i:'🎯',u:'https://watch.sling.com/1/free',t:'400+ channels'},
+                  {n:'Crackle',i:'⚡',u:'https://www.crackle.com',t:'Sony movies & TV'},
+                  {n:'Samsung TV+',i:'📱',u:'https://www.samsung.com/us/televisions-home-theater/tvs/tv-plus',t:'250+ live channels'},
+                  {n:'Xumo',i:'🔵',u:'https://xumo.tv',t:'190+ channels'},
+                  {n:'FilmRise',i:'🎞️',u:'https://filmrise.com',t:'Docs & classics'},
+                  {n:'Vudu Free',i:'💜',u:'https://www.vudu.com',t:'Free with ads'},
+                  {n:'Redbox Free',i:'🔴',u:'https://www.redbox.com',t:'Live TV + movies'},
+                ].map((s,i) => (
+                  <a key={i} href={s.u} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>
+                    <div style={{padding:'12px 14px',background:'#1E1829',border:'1px solid rgba(192,132,252,.12)',borderRadius:12,cursor:'pointer',transition:'all .2s'}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(192,132,252,.35)';e.currentTarget.style.transform='translateY(-2px)'}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(192,132,252,.12)';e.currentTarget.style.transform='translateY(0)'}}>
+                      <div style={{fontSize:22,marginBottom:6}}>{s.i}</div>
+                      <div style={{fontSize:13,fontWeight:500,color:'#F5F0FF'}}>{s.n}</div>
+                      <div style={{fontSize:10,color:'#4ADE80',marginTop:2}}>{s.t}</div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+              <div style={{fontSize:14,fontWeight:500,color:'#C084FC',marginBottom:10}}>🏛️ Public Domain Libraries</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10,marginBottom:20}}>
+                {[
+                  {n:'Internet Archive',i:'🏛️',u:'https://archive.org/details/movies',t:'Millions of films'},
+                  {n:'Prelinger Archive',i:'📽️',u:'https://archive.org/details/prelinger',t:'6,000+ ephemeral films'},
+                  {n:'NASA Media',i:'🚀',u:'https://images.nasa.gov',t:'All public domain'},
+                  {n:'Library of Congress',i:'🦅',u:'https://www.loc.gov/film-and-videos/',t:'Historical footage'},
+                  {n:'Open Culture',i:'🎭',u:'https://www.openculture.com/freemoviesonline',t:'1,150+ classics'},
+                  {n:'European Archive',i:'🇪🇺',u:'https://www.europeanarchive.eu',t:'European history'},
+                ].map((s,i) => (
+                  <a key={i} href={s.u} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>
+                    <div style={{padding:'12px 14px',background:'#1E1829',border:'1px solid rgba(74,222,128,.15)',borderRadius:12,cursor:'pointer',transition:'all .2s'}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(74,222,128,.4)';e.currentTarget.style.transform='translateY(-2px)'}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(74,222,128,.15)';e.currentTarget.style.transform='translateY(0)'}}>
+                      <div style={{fontSize:22,marginBottom:6}}>{s.i}</div>
+                      <div style={{fontSize:13,fontWeight:500,color:'#F5F0FF'}}>{s.n}</div>
+                      <div style={{fontSize:10,color:'#4ADE80',marginTop:2}}>{s.t}</div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+              <div style={{fontSize:14,fontWeight:500,color:'#60A5FA',marginBottom:10}}>📚 Educational (Library Card)</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
+                {[
+                  {n:'Kanopy',i:'🎓',u:'https://www.kanopy.com',t:'Art house + docs'},
+                  {n:'Hoopla',i:'📚',u:'https://www.hoopladigital.com',t:'Movies + audiobooks'},
+                  {n:'PBS',i:'🔵',u:'https://www.pbs.org/video/',t:'Free PBS shows'},
+                  {n:'National Geographic',i:'🌍',u:'https://www.nationalgeographic.com/tv/shows',t:'Free clips & docs'},
+                ].map((s,i) => (
+                  <a key={i} href={s.u} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}>
+                    <div style={{padding:'12px 14px',background:'#1E1829',border:'1px solid rgba(96,165,250,.15)',borderRadius:12,cursor:'pointer',transition:'all .2s'}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(96,165,250,.4)';e.currentTarget.style.transform='translateY(-2px)'}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(96,165,250,.15)';e.currentTarget.style.transform='translateY(0)'}}>
+                      <div style={{fontSize:22,marginBottom:6}}>{s.i}</div>
+                      <div style={{fontSize:13,fontWeight:500,color:'#F5F0FF'}}>{s.n}</div>
+                      <div style={{fontSize:10,color:'#60A5FA',marginTop:2}}>{s.t}</div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )
       default: return <div style={{color:'#9D8FBB',padding:20}}>Page not found</div>
     }
   }
@@ -1149,7 +1357,15 @@ export default function JavariOmniMedia() {
         <div style={{fontFamily:'Georgia,serif',fontSize:21,background:'linear-gradient(135deg,#C084FC,#F472B6)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',letterSpacing:.5,cursor:'pointer'}} onClick={() => setNav('home')}>Javari</div>
         <div style={{display:'flex',alignItems:'center',gap:10,background:'#1E1829',border:'1px solid rgba(192,132,252,.2)',borderRadius:24,padding:'8px 16px',width:'min(280px,40vw)'}}>
           <span style={{color:'#5A4F72',fontSize:13}}>🔍</span>
-          <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search your library..." style={{background:'none',border:'none',outline:'none',color:'#F5F0FF',fontSize:13,fontFamily:'inherit',flex:1}}/>
+          <input
+            value={searchQuery}
+            onChange={e=>setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key==='Enter' && handleSearch(searchQuery)}
+            placeholder="Search movies, channels, public domain, free streaming..."
+            style={{background:'none',border:'none',outline:'none',color:'#F5F0FF',fontSize:13,fontFamily:'inherit',flex:1}}
+          />
+          {searchLoading && <span style={{fontSize:12,color:'#C084FC'}}>⏳</span>}
+          {searchQuery && <span onClick={() => handleSearch(searchQuery)} style={{fontSize:12,color:'#C084FC',cursor:'pointer'}}>→</span>}
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           {server.status==='connected' && <div style={{fontSize:11,color:'#4ADE80',padding:'4px 10px',background:'rgba(74,222,128,.1)',border:'1px solid rgba(74,222,128,.2)',borderRadius:8}}>● {server.name}</div>}
@@ -1176,7 +1392,11 @@ export default function JavariOmniMedia() {
           {navItem('downloads','⬇️','Downloads')}
           {navItem('history','🕐','History')}
           <div style={{...S.sectionLabel,padding:'12px 18px 4px'}}>Sources</div>
-          {navItem('sources','🔗','Connect & Sources')}
+          {navItem('discover','🌐','Free Discovery')}
+          <div onClick={() => disclaimerAccepted ? setNav('sources') : setShowDisclaimer(true)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 16px',borderRadius:10,cursor:'pointer',margin:'1px 10px',fontSize:13,background:nav==='sources'?'linear-gradient(135deg,rgba(192,132,252,.18),rgba(244,114,182,.10))':'transparent',color:nav==='sources'?'#C084FC':'#9D8FBB',fontWeight:nav==='sources'?500:400,transition:'all .15s'}}>
+            <span style={{fontSize:15,width:22,textAlign:'center'}}>🔗</span>
+            <span style={{flex:1}}>Connect & Sources</span>
+          </div>
           {navItem('iptv','📋','IPTV / M3U')}
           <div style={{...S.sectionLabel,padding:'12px 18px 4px'}}>More</div>
           {navItem('settings','⚙️','Settings')}
@@ -1316,6 +1536,34 @@ export default function JavariOmniMedia() {
                 if (hlsRef.current) (hlsRef.current as {destroy:()=>void}).destroy()
               }}
               style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* LEGAL DISCLAIMER MODAL */}
+      {showDisclaimer && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+          <div style={{background:'#161222',border:'1px solid rgba(192,132,252,.3)',borderRadius:20,padding:32,maxWidth:480,width:'100%'}}>
+            <div style={{fontSize:22,marginBottom:12}}>⚖️</div>
+            <div style={{fontFamily:'Georgia,serif',fontSize:18,color:'#F5F0FF',marginBottom:16}}>Before You Connect a Source</div>
+            <div style={{fontSize:13,color:'#9D8FBB',lineHeight:1.8,marginBottom:24}}>
+              Javari is a personal media discovery and playback application.<br/><br/>
+              <strong style={{color:'#F5F0FF'}}>Javari does not host or distribute copyrighted media.</strong><br/><br/>
+              Users are responsible for ensuring they have appropriate rights to access any media sources they connect, including IPTV playlists, NAS libraries, and third-party servers.<br/><br/>
+              Free and legal content sources (FAST platforms, public domain libraries) are always available without any acknowledgement required.
+            </div>
+            <div style={{display:'flex',gap:10}}>
+              <button
+                onClick={() => setShowDisclaimer(false)}
+                style={{flex:1,padding:'11px',borderRadius:10,border:'1px solid rgba(192,132,252,.2)',background:'transparent',color:'#9D8FBB',cursor:'pointer',fontSize:13,fontFamily:'inherit'}}>
+                Cancel
+              </button>
+              <button
+                onClick={() => { setDisclaimerAccepted(true); setShowDisclaimer(false); setNav('sources') }}
+                style={{flex:2,padding:'11px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#C084FC,#F472B6)',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>
+                I Understand — Continue
+              </button>
+            </div>
           </div>
         </div>
       )}
