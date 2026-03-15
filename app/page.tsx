@@ -8,6 +8,10 @@
 // Date: March 13, 2026 | Henderson Standard
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
+import type { PlayerSource } from '@/components/player/UniversalPlayer'
+
+const UniversalPlayer = dynamic(() => import('@/components/player/UniversalPlayer'), { ssr: false })
 import {
   callJavariRouter,
   scanLibraryFolder,
@@ -16,7 +20,7 @@ import {
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
-type NavId = 'home'|'movies'|'shows'|'livetv'|'sports'|'music'|'kids'|'library'|'watchlist'|'downloads'|'history'|'sources'|'iptv'|'settings'|'help'|'javari'|'profile'|'notifications'|'discover'
+type NavId = 'home'|'movies'|'shows'|'livetv'|'sports'|'music'|'kids'|'library'|'watchlist'|'downloads'|'history'|'sources'|'iptv'|'settings'|'help'|'javari'|'profile'|'notifications'|'discover'|'channels'
 
 type LibraryType = 'movies'|'tv'|'music'|'photos'|'podcasts'
 
@@ -105,6 +109,8 @@ const TYPE_COLORS: Record<LibraryType, string> = { movies:'#C084FC', tv:'#F472B6
 export default function JavariOmniMedia() {
   const [nav, setNav] = useState<NavId>('home')
   const [player, setPlayer] = useState<PlayerState>({visible:false,title:'',icon:'🎬',progress:0})
+  // UniversalPlayer source — set when a real stream URL is available
+  const [activePlayerSource, setActivePlayerSource] = useState<PlayerSource | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<unknown>(null)
   const [playing, setPlaying] = useState(false)
@@ -166,12 +172,22 @@ export default function JavariOmniMedia() {
   }, [])
 
   const play = useCallback((title: string, icon: string, streamUrl?: string, viewOffset?: number, duration?: number) => {
-    const progress = duration && viewOffset ? (viewOffset / duration) * 100 : 0
-    const isHLS = streamUrl
-      ? streamUrl.includes('.m3u8') || streamUrl.includes('/hls/') || streamUrl.includes('type=hls')
-      : false
-    setPlayer({visible:true, title, icon, progress, streamUrl, duration, isHLS, isPlaying:true})
-    setPlaying(true)
+    if (streamUrl) {
+      // Route to UniversalPlayer for real streams
+      const isHLS = streamUrl.includes('.m3u8') || streamUrl.includes('/hls/') || streamUrl.includes('type=hls')
+      setActivePlayerSource({
+        url: streamUrl,
+        title,
+        type: isHLS ? 'hls' : 'mp4',
+        startAt: viewOffset ? viewOffset / 1000 : 0,  // Plex viewOffset is in ms
+        duration: duration ? duration / 1000 : undefined,
+        isLive: isHLS && !duration,
+      })
+    } else {
+      // Demo mode — use fake progress ticker
+      setPlayer({visible:true, title, icon, progress:0, duration, isPlaying:true})
+      setPlaying(true)
+    }
   }, [])
 
   // Player progress ticker (for non-video / demo items)
@@ -1398,6 +1414,7 @@ export default function JavariOmniMedia() {
             <span style={{flex:1}}>Connect & Sources</span>
           </div>
           {navItem('iptv','📋','IPTV / M3U')}
+          <a href="/channels" style={{textDecoration:'none'}}>{navItem('channels','📡','Channel Grid')}</a>
           <div style={{...S.sectionLabel,padding:'12px 18px 4px'}}>More</div>
           {navItem('settings','⚙️','Settings')}
           {navItem('help','❓','Help')}
@@ -1414,6 +1431,19 @@ export default function JavariOmniMedia() {
           {renderPage()}
         </div>
       </div>
+
+      {/* UNIVERSAL PLAYER — real streams via UniversalPlayer component */}
+      {activePlayerSource && (
+        <UniversalPlayer
+          source={activePlayerSource}
+          onClose={() => setActivePlayerSource(null)}
+          onEnded={() => setActivePlayerSource(null)}
+          onProgress={(ct, dur) => {
+            // Sync mini bar progress display
+            if (dur > 0) setPlayer(p => ({...p, progress:(ct/dur)*100, duration:dur*1000}))
+          }}
+        />
+      )}
 
       {/* MINI PLAYER — Real HLS.js video playback */}
       {player.visible && (
