@@ -7,14 +7,11 @@
 // No placeholders. Real Plex API. Real folder scanning. Real metadata.
 // Date: March 13, 2026 | Henderson Standard
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   callJavariRouter,
-  plexProxy,
   scanLibraryFolder,
   updateWatchHistory,
-  checkPlatformHealth,
-  type ChatMessage as PlatformChatMessage,
 } from '@/lib/platform/client'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -23,7 +20,16 @@ type NavId = 'home'|'movies'|'shows'|'livetv'|'sports'|'music'|'kids'|'library'|
 
 type LibraryType = 'movies'|'tv'|'music'|'photos'|'podcasts'
 
-interface PlayerState { visible: boolean; title: string; icon: string; progress: number; streamUrl?: string; duration?: number }
+interface PlayerState {
+  visible: boolean
+  title: string
+  icon: string
+  progress: number
+  streamUrl?: string
+  duration?: number
+  isHLS?: boolean
+  isPlaying?: boolean
+}
 
 interface PlexLibrary { key: string; title: string; type: 'movie'|'show'|'artist'|'photo'; count: number; thumb?: string }
 
@@ -99,6 +105,8 @@ const TYPE_COLORS: Record<LibraryType, string> = { movies:'#C084FC', tv:'#F472B6
 export default function JavariOmniMedia() {
   const [nav, setNav] = useState<NavId>('home')
   const [player, setPlayer] = useState<PlayerState>({visible:false,title:'',icon:'🎬',progress:0})
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const hlsRef = useRef<unknown>(null)
   const [playing, setPlaying] = useState(false)
   const [toast, setToast] = useState({visible:false,message:'',type:'info'})
 
@@ -149,18 +157,100 @@ export default function JavariOmniMedia() {
 
   const play = useCallback((title: string, icon: string, streamUrl?: string, viewOffset?: number, duration?: number) => {
     const progress = duration && viewOffset ? (viewOffset / duration) * 100 : 0
-    setPlayer({visible:true,title,icon,progress,streamUrl,duration})
+    const isHLS = streamUrl
+      ? streamUrl.includes('.m3u8') || streamUrl.includes('/hls/') || streamUrl.includes('type=hls')
+      : false
+    setPlayer({visible:true, title, icon, progress, streamUrl, duration, isHLS, isPlaying:true})
     setPlaying(true)
   }, [])
 
-  // Player progress ticker
+  // Player progress ticker (for non-video / demo items)
   useEffect(() => {
-    if (!player.visible || !playing) return
+    if (!player.visible || !playing || player.streamUrl) return
     const t = setInterval(() => {
       setPlayer(p => p.progress >= 100 ? {...p,visible:false} : {...p,progress: p.progress + 0.15})
     }, 300)
     return () => clearInterval(t)
-  }, [player.visible, playing])
+  }, [player.visible, playing, player.streamUrl])
+
+  // HLS.js / video wiring
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !player.visible || !player.streamUrl) return
+
+    // Destroy previous HLS instance
+    if (hlsRef.current) {
+      (hlsRef.current as { destroy: () => void }).destroy()
+      hlsRef.current = null
+    }
+
+    const loadVideo = async () => {
+      const url = player.streamUrl!
+
+      // Native HLS (Safari / iOS)
+      if (video.canPlayType('application/vnd.apple.mpegurl') && (url.includes('.m3u8') || player.isHLS)) {
+        video.src = url
+        video.load()
+        if (player.duration && player.progress > 0) {
+          video.currentTime = (player.progress / 100) * player.duration / 1000
+        }
+        video.play().catch(() => {})
+        return
+      }
+
+      // HLS.js (Chrome, Firefox, Edge)
+      if (url.includes('.m3u8') || player.isHLS) {
+        try {
+          const HlsModule = await import('hls.js')
+          const Hls = HlsModule.default
+          if (Hls.isSupported()) {
+            const hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+              backBufferLength: 90,
+            })
+            hlsRef.current = hls
+            hls.loadSource(url)
+            hls.attachMedia(video)
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              if (player.duration && player.progress > 0) {
+                video.currentTime = (player.progress / 100) * player.duration / 1000
+              }
+              video.play().catch(() => {})
+            })
+            hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal?: boolean; type?: string }) => {
+              if (data.fatal) {
+                // Fatal error — fallback to direct src
+                video.src = url
+                video.load()
+                video.play().catch(() => {})
+              }
+            })
+            return
+          }
+        } catch {
+          // HLS.js unavailable — fall through to direct
+        }
+      }
+
+      // Direct MP4 / non-HLS (Plex direct streams, local files)
+      video.src = url
+      video.load()
+      if (player.duration && player.progress > 0) {
+        video.currentTime = (player.progress / 100) * player.duration / 1000
+      }
+      video.play().catch(() => {})
+    }
+
+    loadVideo()
+
+    return () => {
+      if (hlsRef.current) {
+        (hlsRef.current as { destroy: () => void }).destroy()
+        hlsRef.current = null
+      }
+    }
+  }, [player.streamUrl, player.visible])
 
   // Format duration ms → "1h 52m"
   const fmtDuration = (ms: number) => {
@@ -449,7 +539,7 @@ export default function JavariOmniMedia() {
             <span style={{fontFamily:'Georgia,serif',fontSize:18,color:'#F5F0FF'}}>Continue Watching {helpTip('Items you started watching in Plex — your exact progress is preserved.')}</span>
             <span onClick={() => { setNav('library'); setActiveLibraryKey(plexLibraries.find(l=>l.type==='movie')?.key||null) }} style={{fontSize:12,color:'#C084FC',cursor:'pointer'}}>See all</span>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12}}>
             {recentlyWatched.slice(0,4).map(item => <div key={item.id}>{plexCard(item)}</div>)}
           </div>
         </div>
@@ -462,7 +552,7 @@ export default function JavariOmniMedia() {
             <span style={{fontFamily:'Georgia,serif',fontSize:18,color:'#F5F0FF'}}>🎬 Your Movies</span>
             <span onClick={() => setNav('movies')} style={{fontSize:12,color:'#C084FC',cursor:'pointer'}}>See all {standaloneMovies.length}</span>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12}}>
             {standaloneMovies.slice(0,8).map(item => <div key={item.id}>{scannedCard(item)}</div>)}
           </div>
         </div>
@@ -758,7 +848,7 @@ export default function JavariOmniMedia() {
             <button style={S.btnGrad} onClick={() => setNav('sources')}>Set Up Sources →</button>
           </div>
         ) : (
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:14}}>
             {(activeLibraryKey
               ? (plexItems[activeLibraryKey] || []).map(item => <div key={item.id}>{plexCard(item)}</div>)
               : [...allPlexItems.slice(0,12).map(item => <div key={`plex-${item.id}`}>{plexCard(item)}</div>),
@@ -788,7 +878,7 @@ export default function JavariOmniMedia() {
           <button style={S.btnGrad} onClick={() => { setNav('sources'); setSourceTab('standalone') }}>Add Movie Folder</button>
         </div>
       ) : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:14}}>
           {allPlexItems.filter(i=>i.type==='movie').map(item => <div key={item.id}>{plexCard(item)}</div>)}
           {standaloneMovies.map(item => <div key={item.id}>{scannedCard(item)}</div>)}
         </div>
@@ -809,7 +899,7 @@ export default function JavariOmniMedia() {
           <button style={S.btnGrad} onClick={() => { setNav('sources'); setSourceTab('standalone') }}>Add TV Shows Folder</button>
         </div>
       ) : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:14}}>
           {allPlexItems.filter(i=>i.type==='show'||i.type==='episode').map(item => <div key={item.id}>{plexCard(item)}</div>)}
           {standaloneShows.map(item => <div key={item.id}>{scannedCard(item)}</div>)}
         </div>
@@ -1057,7 +1147,7 @@ export default function JavariOmniMedia() {
       {/* TOP NAV */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',height:60,background:'rgba(14,11,20,.97)',backdropFilter:'blur(20px)',borderBottom:'1px solid rgba(192,132,252,.12)',position:'sticky',top:0,zIndex:100}}>
         <div style={{fontFamily:'Georgia,serif',fontSize:21,background:'linear-gradient(135deg,#C084FC,#F472B6)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',letterSpacing:.5,cursor:'pointer'}} onClick={() => setNav('home')}>Javari</div>
-        <div style={{display:'flex',alignItems:'center',gap:10,background:'#1E1829',border:'1px solid rgba(192,132,252,.2)',borderRadius:24,padding:'8px 16px',width:280}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,background:'#1E1829',border:'1px solid rgba(192,132,252,.2)',borderRadius:24,padding:'8px 16px',width:'min(280px,40vw)'}}>
           <span style={{color:'#5A4F72',fontSize:13}}>🔍</span>
           <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search your library..." style={{background:'none',border:'none',outline:'none',color:'#F5F0FF',fontSize:13,fontFamily:'inherit',flex:1}}/>
         </div>
@@ -1071,7 +1161,7 @@ export default function JavariOmniMedia() {
       <div style={{display:'flex',height:'calc(100vh - 60px)'}}>
 
         {/* SIDEBAR */}
-        <div style={{width:205,flexShrink:0,background:'#161222',borderRight:'1px solid rgba(192,132,252,.1)',overflowY:'auto',paddingTop:6,display:'flex',flexDirection:'column'}}>
+        <div style={{width:205,flexShrink:0,background:'#161222',borderRight:'1px solid rgba(192,132,252,.1)',overflowY:'auto',paddingTop:6,display:'flex',flexDirection:'column'}} className="javari-sidebar">
           <div style={{...S.sectionLabel,padding:'12px 18px 4px'}}>Discover</div>
           {navItem('home','🏠','Home')}
           {navItem('movies','🎬','Movies')}
@@ -1105,28 +1195,128 @@ export default function JavariOmniMedia() {
         </div>
       </div>
 
-      {/* MINI PLAYER */}
+      {/* MINI PLAYER — Real HLS.js video playback */}
       {player.visible && (
-        <div style={{position:'fixed',bottom:0,left:0,right:0,height:68,background:'rgba(14,11,20,.97)',backdropFilter:'blur(20px)',borderTop:'1px solid rgba(192,132,252,.15)',display:'flex',alignItems:'center',padding:'0 22px',gap:16,zIndex:200}}>
-          <div style={{width:42,height:42,borderRadius:9,background:player.icon?'linear-gradient(135deg,#C084FC,#F472B6)':`url() center/cover`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{player.icon||'🎬'}</div>
-          <div style={{width:170,flexShrink:0}}>
-            <div style={{fontSize:12,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{player.title}</div>
-            <div style={{fontSize:10,color:'#9D8FBB',marginTop:1}}>Javari · Now playing</div>
+        <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:200}}>
+          {/* Full-screen video overlay when stream URL is present */}
+          {player.streamUrl && (
+            <div style={{position:'fixed',inset:0,background:'#000',zIndex:199,display:'flex',flexDirection:'column'}}>
+              <video
+                ref={videoRef}
+                style={{flex:1,width:'100%',height:'calc(100% - 80px)',objectFit:'contain',background:'#000'}}
+                controls={false}
+                playsInline
+                autoPlay
+                onTimeUpdate={e => {
+                  const v = e.currentTarget
+                  if (v.duration > 0) {
+                    setPlayer(p => ({...p, progress: (v.currentTime / v.duration) * 100}))
+                  }
+                }}
+                onEnded={() => setPlayer(p => ({...p, visible: false}))}
+                onError={() => {
+                  // Fallback: try direct src if HLS failed
+                  const v = videoRef.current
+                  if (v && player.streamUrl && !v.src.includes('fallback')) {
+                    v.src = player.streamUrl
+                    v.load()
+                    v.play().catch(() => {})
+                  }
+                }}
+              />
+              {/* Video overlay controls */}
+              <div style={{position:'absolute',top:12,right:12,display:'flex',gap:8,zIndex:201}}>
+                <button
+                  onClick={() => { const v = videoRef.current; if(v) v.requestFullscreen?.() }}
+                  style={{padding:'6px 12px',borderRadius:8,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',cursor:'pointer',fontSize:12,backdropFilter:'blur(4px)'}}>
+                  ⛶ Fullscreen
+                </button>
+                <button
+                  onClick={() => { setPlayer(p=>({...p,visible:false})); if(hlsRef.current)(hlsRef.current as {destroy:()=>void}).destroy() }}
+                  style={{padding:'6px 12px',borderRadius:8,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',cursor:'pointer',fontSize:12,backdropFilter:'blur(4px)'}}>
+                  ✕ Close
+                </button>
+              </div>
+              {/* Stream quality indicator */}
+              {player.isHLS && (
+                <div style={{position:'absolute',top:12,left:12,padding:'4px 10px',borderRadius:6,background:'rgba(192,132,252,.8)',color:'#fff',fontSize:10,fontWeight:600}}>
+                  ● LIVE
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mini player bar */}
+          <div style={{height:68,background:'rgba(14,11,20,.97)',backdropFilter:'blur(20px)',borderTop:'1px solid rgba(192,132,252,.15)',display:'flex',alignItems:'center',padding:'0 22px',gap:16,position:'relative',zIndex:200}}>
+            <div style={{width:42,height:42,borderRadius:9,background:'linear-gradient(135deg,#C084FC,#F472B6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>
+              {player.icon||'🎬'}
+            </div>
+            <div style={{width:170,flexShrink:0}}>
+              <div style={{fontSize:12,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{player.title}</div>
+              <div style={{fontSize:10,color:'#9D8FBB',marginTop:1}}>
+                {player.streamUrl ? (player.isHLS ? '● Live stream' : '▶ Playing') : 'Javari · Now playing'}
+              </div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8,flex:1,justifyContent:'center'}}>
+              <button
+                onClick={() => { const v = videoRef.current; if(v) v.currentTime = Math.max(0, v.currentTime - 30) }}
+                style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:13}}>⏮</button>
+              <button
+                onClick={() => { const v = videoRef.current; if(v) v.currentTime = Math.max(0, v.currentTime - 10) }}
+                style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>⏪</button>
+              <button
+                onClick={() => {
+                  const v = videoRef.current
+                  if (v) { playing ? v.pause() : v.play().catch(()=>{}) }
+                  setPlaying(p => !p)
+                }}
+                style={{width:40,height:40,borderRadius:'50%',border:'none',background:'#C084FC',cursor:'pointer',color:'#fff',fontSize:15,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {playing ? '⏸' : '▶'}
+              </button>
+              <button
+                onClick={() => { const v = videoRef.current; if(v) v.currentTime = Math.min(v.duration||0, v.currentTime + 10) }}
+                style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>⏩</button>
+              <button
+                onClick={() => { const v = videoRef.current; if(v) v.currentTime = Math.min(v.duration||0, v.currentTime + 30) }}
+                style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:13}}>⏭</button>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8,flex:1,maxWidth:320}}>
+              <span style={{fontSize:10,color:'#9D8FBB',minWidth:32}}>
+                {player.duration&&player.progress>0 ? fmtDuration((player.progress/100)*player.duration) : '0:00'}
+              </span>
+              <div
+                style={{flex:1,height:4,background:'#5A4F72',borderRadius:2,cursor:'pointer',position:'relative'}}
+                onClick={e => {
+                  const v = videoRef.current
+                  if (!v || !v.duration) return
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const pct = (e.clientX - rect.left) / rect.width
+                  v.currentTime = pct * v.duration
+                  setPlayer(p => ({...p, progress: pct * 100}))
+                }}>
+                <div style={{height:'100%',width:`${Math.min(player.progress,100)}%`,background:'linear-gradient(90deg,#C084FC,#F472B6)',borderRadius:2,transition:'width .2s'}}/>
+              </div>
+              <span style={{fontSize:10,color:'#9D8FBB',minWidth:32}}>
+                {player.duration ? fmtDuration(player.duration) : '--:--'}
+              </span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:7,color:'#9D8FBB',fontSize:13}}>
+              🔊
+              <input
+                type="range" min={0} max={100} defaultValue={80}
+                style={{width:72, accentColor:'#C084FC'}}
+                onChange={e => { const v = videoRef.current; if(v) v.volume = Number(e.target.value)/100 }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                setPlayer(p=>({...p,visible:false}))
+                const v = videoRef.current
+                if (v) { v.pause(); v.src = '' }
+                if (hlsRef.current) (hlsRef.current as {destroy:()=>void}).destroy()
+              }}
+              style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>✕</button>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:8,flex:1,justifyContent:'center'}}>
-            {['⏮','⏪'].map((ic,i) => <button key={i} style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>{ic}</button>)}
-            <button onClick={() => setPlaying(v=>!v)} style={{width:40,height:40,borderRadius:'50%',border:'none',background:'#C084FC',cursor:'pointer',color:'#fff',fontSize:15,display:'flex',alignItems:'center',justifyContent:'center'}}>{playing?'⏸':'▶'}</button>
-            {['⏩','⏭'].map((ic,i) => <button key={i} style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>{ic}</button>)}
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:8,flex:1,maxWidth:320}}>
-            <span style={{fontSize:10,color:'#9D8FBB',minWidth:32}}>{player.duration&&player.progress>0?fmtDuration((player.progress/100)*player.duration):'0:00'}</span>
-            <div style={{flex:1,height:3,background:'#5A4F72',borderRadius:2,cursor:'pointer'}}><div style={{height:'100%',width:`${Math.min(player.progress,100)}%`,background:'linear-gradient(90deg,#C084FC,#F472B6)',borderRadius:2,transition:'width .3s'}}/></div>
-            <span style={{fontSize:10,color:'#9D8FBB',minWidth:32}}>{player.duration?fmtDuration(player.duration):'--:--'}</span>
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:7,color:'#9D8FBB',fontSize:13}}>
-            🔊<input type="range" min={0} max={100} defaultValue={80} style={{width:72,accentColor:'#C084FC'}}/>
-          </div>
-          <button onClick={() => setPlayer(p=>({...p,visible:false}))} style={{width:32,height:32,borderRadius:'50%',border:'none',background:'transparent',cursor:'pointer',color:'#9D8FBB',fontSize:15}}>✕</button>
         </div>
       )}
 
