@@ -1,9 +1,21 @@
 'use client'
+// ARCHITECTURE: This app is a thin client.
+// All infrastructure calls route through craudiovizai.com platform services.
+// See lib/platform/client.ts for the complete platform API client.
+// Direct OpenRouter, TMDB, Supabase calls are NOT permitted in this file.
 // app/page.tsx — Javari Omni-Media — Complete Working Platform
 // No placeholders. Real Plex API. Real folder scanning. Real metadata.
 // Date: March 13, 2026 | Henderson Standard
 
 import { useState, useEffect, useCallback } from 'react'
+import {
+  callJavariRouter,
+  plexProxy,
+  scanLibraryFolder,
+  updateWatchHistory,
+  checkPlatformHealth,
+  type ChatMessage as PlatformChatMessage,
+} from '@/lib/platform/client'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -234,11 +246,9 @@ export default function JavariOmniMedia() {
     setNewFolderLabel('')
     showToast(`Scanning ${label}...`)
     try {
-      const res = await fetch('/api/scan', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({folderPath:newFolder.path, libraryType:newFolderType, fetchMetadata:true, maxItems:500})
-      })
+      // Platform client: delegates to craudiovizai.com/api/media/library/scan
+      const scanData = await scanLibraryFolder(newFolder.path, newFolderType)
+      const res = { ok: true, json: async () => scanData }
       const data = await res.json()
       if (!data.success && data.error) {
         setFolders(prev => prev.map(f => f.id===id ? {...f,status:'error',error:data.error} : f))
@@ -258,11 +268,9 @@ export default function JavariOmniMedia() {
     setFolders(prev => prev.map(f => f.id===folder.id ? {...f,status:'scanning',error:undefined} : f))
     showToast(`Rescanning ${folder.label}...`)
     try {
-      const res = await fetch('/api/scan', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({folderPath:folder.path, libraryType:folder.type, fetchMetadata:true, maxItems:500})
-      })
+      // Platform client: delegates to craudiovizai.com/api/media/library/scan
+      const scanDataRescan = await scanLibraryFolder(folder.path, folder.type)
+      const res = { ok: true, json: async () => scanDataRescan }
       const data = await res.json()
       setFolders(prev => prev.map(f => f.id===folder.id ? {...f,status:data.success?'done':'error',itemCount:data.importedItems,items:data.items,scannedAt:new Date().toLocaleString(),error:data.error} : f))
       if (data.success) showToast(`Rescan complete — ${data.importedItems} items ✓`, 'success')
@@ -280,24 +288,25 @@ export default function JavariOmniMedia() {
     const newHistory = [...chatHistory, {role:'user',text:userMsg}]
     setChatHistory(newHistory)
     try {
-      const res = await fetch('/api/javari/chat', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          messages: newHistory.map(m => ({role: m.role==='ai'?'assistant':'user', content: m.text})),
-          context: {
-            plexConnected: server.status==='connected',
-            plexLibraries: plexLibraries.map(l=>l.title),
-            standalonefolders: folders.map(f=>({label:f.label,type:f.type,count:f.itemCount})),
-            services: services.filter(s=>s.connected).map(s=>s.name),
-          }
-        })
-      })
-      const data = await res.json()
-      const reply = data.content?.[0]?.text || data.response || "I'm here to help — what would you like to watch or set up?"
+      // Platform client: routes through craudiovizai.com/api/javari/router
+      // No direct OpenRouter calls. No credentials in this app.
+      const chatResult = await callJavariRouter(
+        newHistory.map(m => ({
+          role: (m.role==='ai' ? 'assistant' : 'user') as 'user'|'assistant',
+          content: m.text
+        })),
+        {
+          plexConnected: server.status==='connected',
+          plexLibraries: plexLibraries.map(l=>l.title),
+          standaloneFolders: folders.map(f=>({label:f.label,type:f.type,count:f.itemCount})),
+          services: services.filter(s=>s.connected).map(s=>s.name),
+        },
+        'media_recommendations'
+      )
+      const reply = chatResult.content || "I'm here to help — what would you like to watch or set up?"
       setChatHistory([...newHistory, {role:'ai',text:reply}])
     } catch {
-      setChatHistory([...newHistory, {role:'ai',text:"I'm having trouble connecting right now. Make sure the ANTHROPIC_API_KEY is configured in your Vercel environment variables."}])
+      setChatHistory([...newHistory, {role:'ai',text:"I'm having a moment — try again in a few seconds."}])
     }
   }
 
