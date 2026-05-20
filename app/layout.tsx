@@ -1,77 +1,32 @@
-// app/layout.tsx — Javari Omni-Media
-// PWA support: manifest, theme color, SW registration, fullscreen launch
-// Date: March 13, 2026 | Henderson Standard
-
-import type { Metadata, Viewport } from 'next'
-import './globals.css'
-
+// app/layout.tsx — javari-omni-media
+// Universal brand shell — EIN, auth CTA, metadata
+// CR AudioViz AI · EIN 39-3646201 · May 2026
+import type { Metadata } from 'next'
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
-  title: 'Javari — Your Entertainment Universe',
-  description: 'Movies, live TV, music, sports — from every service you own. One beautiful app.',
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Javari',
-  },
-  other: {
-    'mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-status-bar-style': 'black-translucent',
-    'msapplication-TileColor': '#0E0B14',
-    'msapplication-tap-highlight': 'no',
-  },
+  title: 'Javari Omni Media',
+  description: 'Javari Omni Media — powered by Javari AI on the CR AudioViz AI platform',
+  openGraph: { title: 'Javari Omni Media', type: 'website' },
 }
-
-export const viewport: Viewport = {
-  themeColor: '#C084FC',
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: 'cover',
-}
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
-        <meta name="apple-mobile-web-app-title" content="Javari" />
-        {/* TV / large display hints */}
-        <meta name="screen-orientation" content="any" />
-      </head>
-      <body>
-        {children}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Register service worker for PWA
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
-                    // Check for updates every 60 seconds
-                    setInterval(() => reg.update(), 60000)
-                  }).catch(function() {
-                    // SW registration failed — app still works
-                  })
-                })
-              }
-
-              // Handle PWA install prompt
-              window.addEventListener('beforeinstallprompt', function(e) {
-                e.preventDefault()
-                window.__pwaPrompt = e
-              })
-
-              // Restore scroll on nav
-              if ('scrollRestoration' in history) {
-                history.scrollRestoration = 'manual'
-              }
-            `,
-          }}
-        />
+      <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui,sans-serif' }}>
+        <div style={{ background: 'rgba(7,8,15,0.95)', backdropFilter: 'blur(8px)', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200, borderBottom: '1px solid rgba(99,102,241,0.12)' }}>
+          <a href="https://craudiovizai.com" style={{ color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>📺</span>
+            <span style={{ color: '#8b5cf6' }}>Javari Omni Media</span>
+            <span style={{ color: '#374151', fontSize: 10 }}>· CR AudioViz AI · EIN 39-3646201</span>
+          </a>
+          <a href="https://craudiovizai.com/auth/signup" style={{ background: '#8b5cf6', color: '#000', borderRadius: 6, padding: '5px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>Sign Up Free →</a>
+        </div>
+        <div style={{ paddingTop: 48 }}>{children}</div>
+        <footer style={{ background: '#050609', borderTop: '1px solid rgba(255,255,255,0.04)', padding: '16px 20px', textAlign: 'center' }}>
+          <p style={{ color: '#1f2937', fontSize: 11, margin: 0 }}>
+            © 2026 CR AudioViz AI, LLC — EIN: 39-3646201 · Fort Myers, Florida ·{' '}
+            <a href="https://craudiovizai.com" style={{ color: '#8b5cf6', textDecoration: 'none' }}>craudiovizai.com</a>
+          </p>
+        </footer>
       </body>
     </html>
   )
