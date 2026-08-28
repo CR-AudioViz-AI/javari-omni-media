@@ -21,6 +21,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import sharp from 'sharp'
 import { parseFile as parseMusicMetadata } from 'music-metadata'
 import * as id3 from 'node-id3'
+import { secretKey, supabaseUrl } from "@craudioviz/platform-sdk";
 
 // ============================================================================
 // TYPES
@@ -118,8 +119,8 @@ export class LibraryScanner {
     
     // Initialize Supabase
     this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      supabaseUrl(),
+      secretKey()
     )
   }
   
@@ -480,8 +481,8 @@ export class PlexImporter {
     this.userId = userId
     
     this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      supabaseUrl(),
+      secretKey()
     )
   }
   

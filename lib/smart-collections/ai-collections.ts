@@ -15,6 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
+import { secretKey, supabaseUrl } from "@craudioviz/platform-sdk";
 
 // ============================================================================
 // TYPES
@@ -320,8 +321,8 @@ export class AICollectionGenerator {
   constructor(userId: string) {
     this.userId = userId
     this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      supabaseUrl(),
+      secretKey()
     )
   }
   

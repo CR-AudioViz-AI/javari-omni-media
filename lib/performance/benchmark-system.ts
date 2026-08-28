@@ -19,6 +19,7 @@
 import { createClient } from '@supabase/supabase-js'
 import os from 'os'
 import { performance } from 'perf_hooks'
+import { secretKey, supabaseUrl } from "@craudioviz/platform-sdk";
 
 // ============================================================================
 // TYPES
@@ -86,8 +87,8 @@ export class PerformanceMonitor {
   
   constructor() {
     this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      supabaseUrl(),
+      secretKey()
     )
   }
   
