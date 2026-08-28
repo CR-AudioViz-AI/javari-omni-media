@@ -2,10 +2,11 @@
 // Stores Plex/TMDB metadata in Supabase for faster loads
 // CR AudioViz AI · EIN 39-3646201 · May 2026
 import { NextRequest, NextResponse } from "next/server";
+import { secretKey, supabaseUrl } from "@craudioviz/platform-sdk";
 export const dynamic = "force-dynamic";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://kteobfyferrukqeolofj.supabase.co";
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SUPABASE_URL = supabaseUrl();
+const SERVICE_KEY = secretKey();
 
 async function supabase(method: string, table: string, body?: any, params?: string) {
   const url = `${SUPABASE_URL}/rest/v1/${table}${params ? `?${params}` : ""}`;

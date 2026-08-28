@@ -18,6 +18,7 @@ import { createCanvas, loadImage } from 'canvas'
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
 import fs from 'fs/promises'
+import { secretKey, supabaseUrl } from "@craudioviz/platform-sdk";
 
 // ============================================================================
 // TYPES
@@ -63,8 +64,8 @@ export class FaceRecognitionEngine {
   constructor(userId: string) {
     this.userId = userId
     this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      supabaseUrl(),
+      secretKey()
     )
   }
   
