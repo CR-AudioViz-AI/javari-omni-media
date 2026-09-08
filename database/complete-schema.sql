@@ -23,17 +23,11 @@ CREATE EXTENSION IF NOT EXISTS "btree_gin"; -- For better indexing
 -- ============================================================================
 
 -- Users table (synced from craudiovizai.com)
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email TEXT UNIQUE NOT NULL,
-    name TEXT,
-    avatar_url TEXT,
-    plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
-    credits INTEGER NOT NULL DEFAULT 100,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_login_at TIMESTAMPTZ
-);
+-- 2026-09-07: the CREATE TABLE for public.users was removed.
+-- auth.users is the single user table. public.users came from a starter
+-- scaffold, held 29 rows that never logged in, and was retired. Recreating
+-- it here would restore the second user population.
+
 
 -- Media categories (extensible!)
 CREATE TABLE IF NOT EXISTS media_categories (
