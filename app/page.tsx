@@ -47,7 +47,7 @@ export default function OmniMediaHome() {
 
   return (
     <div style={{ minHeight:"100vh", background:"#080812", color:"#e2e8f0", fontFamily:"system-ui" }}>
-      <nav style={{ background:"#1E3A5F", padding:"0 20px", height:52, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
+      <nav data-app-chrome style={{ background:"#1E3A5F", padding:"0 20px", height:52, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontWeight:900, color:"#00B4D8", fontSize:16 }}>Javari</span>
           <span style={{ color:"rgba(0,180,216,0.5)" }}>·</span>
